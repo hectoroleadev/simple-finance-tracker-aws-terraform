@@ -55,6 +55,17 @@ exports.handler = async (event) => {
                     return await saveHistory(body.history);
                 }
             }
+        } else if (path.startsWith("/history/") && method === "DELETE") {
+            const id = path.split("/").pop();
+            if (id) {
+                return await deleteHistoryItem(id);
+            } else {
+                return {
+                    statusCode: 400,
+                    headers,
+                    body: JSON.stringify({ message: "Missing id in path" }),
+                };
+            }
         }
 
         return {
@@ -165,5 +176,18 @@ async function deleteItem(id) {
         statusCode: 200,
         headers,
         body: JSON.stringify({ message: "Item deleted successfully" }),
+    };
+}
+
+async function deleteHistoryItem(id) {
+    const command = new DeleteCommand({
+        TableName: HISTORY_TABLE,
+        Key: { id },
+    });
+    await docClient.send(command);
+    return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ message: "History item deleted successfully" }),
     };
 }
