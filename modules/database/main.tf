@@ -1,0 +1,37 @@
+resource "aws_dynamodb_table" "finance_items" {
+  name           = "${var.project_name}-items"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-items"
+    Environment = "production"
+  }
+}
+
+resource "aws_dynamodb_table" "finance_history" {
+  name           = "${var.project_name}-history"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "id"
+  range_key      = "date"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "date"
+    type = "S"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-history"
+    Environment = "production"
+  }
+}
