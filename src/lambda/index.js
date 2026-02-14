@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, ScanCommand, BatchWriteCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, ScanCommand, BatchWriteCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
@@ -10,7 +10,7 @@ const HISTORY_TABLE = process.env.HISTORY_TABLE_NAME;
 const headers = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "*",
 };
 
@@ -26,7 +26,7 @@ exports.handler = async (event) => {
     }
 
     try {
-        if (path === "/items") {
+        if (path === "/items" || path === "/items/") {
             if (method === "GET") {
                 return await getItems();
             } else if (method === "POST") {
@@ -34,6 +34,17 @@ exports.handler = async (event) => {
                 if (body.items) {
                     return await saveItems(body.items);
                 }
+            }
+        } else if (path.startsWith("/items/") && method === "DELETE") {
+            const id = path.split("/").pop();
+            if (id) {
+                return await deleteItem(id);
+            } else {
+                return {
+                    statusCode: 400,
+                    headers,
+                    body: JSON.stringify({ message: "Missing id in path" }),
+                };
             }
         } else if (path === "/history") {
             if (method === "GET") {
@@ -142,4 +153,17 @@ function chunkArray(array, size) {
         chunks.push(array.slice(i, i + size));
     }
     return chunks;
+}
+
+async function deleteItem(id) {
+    const command = new DeleteCommand({
+        TableName: ITEMS_TABLE,
+        Key: { id },
+    });
+    await docClient.send(command);
+    return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ message: "Item deleted successfully" }),
+    };
 }
