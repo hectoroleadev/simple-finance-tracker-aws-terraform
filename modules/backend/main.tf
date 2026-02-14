@@ -101,6 +101,7 @@ resource "aws_api_gateway_method" "proxy" {
   resource_id   = aws_api_gateway_resource.proxy.id
   http_method   = "ANY"
   authorization = "NONE"
+  api_key_required = true
 }
 
 resource "aws_api_gateway_integration" "lambda" {
@@ -118,6 +119,7 @@ resource "aws_api_gateway_method" "proxy_root" {
    resource_id   = aws_api_gateway_rest_api.api.root_resource_id
    http_method   = "ANY"
    authorization = "NONE"
+   api_key_required = true
 }
 
 resource "aws_api_gateway_integration" "lambda_root" {
@@ -145,6 +147,25 @@ resource "aws_api_gateway_stage" "api" {
   stage_name    = "prod"
 }
 
+resource "aws_api_gateway_api_key" "main" {
+  name = "${var.project_name}-key"
+}
+
+resource "aws_api_gateway_usage_plan" "main" {
+  name = "${var.project_name}-usage-plan"
+
+  api_stages {
+    api_id = aws_api_gateway_rest_api.api.id
+    stage  = aws_api_gateway_stage.api.stage_name
+  }
+}
+
+resource "aws_api_gateway_usage_plan_key" "main" {
+  key_id        = aws_api_gateway_api_key.main.id
+  key_type      = "API_KEY"
+  usage_plan_id = aws_api_gateway_usage_plan.main.id
+}
+
 resource "aws_lambda_permission" "api_gateway" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
@@ -152,3 +173,8 @@ resource "aws_lambda_permission" "api_gateway" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
 }
+
+output "api_key_value" {
+  value = aws_api_gateway_api_key.main.value
+}
+

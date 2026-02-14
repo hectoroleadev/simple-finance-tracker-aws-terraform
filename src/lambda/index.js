@@ -1,11 +1,31 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { DynamoDBDocumentClient, ScanCommand, BatchWriteCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
+const { z } = require("zod");
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
 const ITEMS_TABLE = process.env.ITEMS_TABLE_NAME;
 const HISTORY_TABLE = process.env.HISTORY_TABLE_NAME;
+
+// Validation Schemas
+const FinanceItemSchema = z.object({
+    id: z.string().uuid().or(z.string().regex(/^h\d+$/)), // Supports UUID and legacy IDs
+    name: z.string().min(1),
+    amount: z.number(),
+    category: z.enum(["investments", "liquid_cash", "pending_payments", "retirement", "debt"]),
+});
+
+const HistoryEntrySchema = z.object({
+    id: z.string(),
+    date: z.string().datetime(),
+    savings: z.number(),
+    debt: z.number(),
+    balance: z.number(),
+    retirement: z.number(),
+    year: z.number().optional(),
+    month: z.string().optional(),
+});
 
 const headers = {
     "Content-Type": "application/json",
@@ -94,6 +114,16 @@ async function getItems() {
 }
 
 async function saveItems(items) {
+    // Validation
+    const validation = z.array(FinanceItemSchema).safeParse(items);
+    if (!validation.success) {
+        return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ message: "Invalid items format", errors: validation.error.format() }),
+        };
+    }
+
     if (items.length === 0) {
         return { statusCode: 200, headers, body: JSON.stringify({ message: "No items to save" }) };
     }
@@ -132,6 +162,16 @@ async function getHistory() {
 }
 
 async function saveHistory(historyEntries) {
+    // Validation
+    const validation = z.array(HistoryEntrySchema).safeParse(historyEntries);
+    if (!validation.success) {
+        return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ message: "Invalid history format", errors: validation.error.format() }),
+        };
+    }
+
     if (historyEntries.length === 0) {
         return { statusCode: 200, headers, body: JSON.stringify({ message: "No history to save" }) };
     }

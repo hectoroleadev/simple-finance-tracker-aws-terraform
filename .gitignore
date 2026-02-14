@@ -32,3 +32,11 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Node modules
+node_modules/
+src/lambda/node_modules/
+package-lock.json
+
+# Lambda artifacts
+modules/backend/lambda_function.zip
