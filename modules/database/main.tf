@@ -12,6 +12,10 @@ resource "aws_dynamodb_table" "finance_items" {
     Name        = "${var.project_name}-items"
     Environment = "production"
   }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_dynamodb_table" "finance_history" {
@@ -27,5 +31,9 @@ resource "aws_dynamodb_table" "finance_history" {
   tags = {
     Name        = "${var.project_name}-history"
     Environment = "production"
+  }
+
+  lifecycle {
+    prevent_destroy = true
   }
 }
