@@ -187,6 +187,29 @@ resource "aws_api_gateway_integration" "confirm_signup_integration" {
   uri                     = aws_lambda_function.api_lambda.invoke_arn
 }
 
+resource "aws_api_gateway_resource" "refresh_resource" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_resource.auth_resource.id
+  path_part   = "refresh"
+}
+
+resource "aws_api_gateway_method" "refresh_post" {
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_resource.refresh_resource.id
+  http_method      = "POST"
+  authorization    = "NONE"
+  api_key_required = false
+}
+
+resource "aws_api_gateway_integration" "refresh_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_method.refresh_post.resource_id
+  http_method             = aws_api_gateway_method.refresh_post.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.api_lambda.invoke_arn
+}
+
 
 resource "aws_api_gateway_method" "proxy_get" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
@@ -325,6 +348,7 @@ resource "aws_api_gateway_deployment" "api" {
     aws_api_gateway_integration.signup_integration, # New dependency
     aws_api_gateway_integration.login_integration,  # New dependency
     aws_api_gateway_integration.confirm_signup_integration, # New dependency
+    aws_api_gateway_integration.refresh_integration, # Added
     aws_api_gateway_integration.proxy_options_integration
   ]
 
@@ -350,6 +374,8 @@ resource "aws_api_gateway_deployment" "api" {
       aws_api_gateway_integration.login_integration,
       aws_api_gateway_method.confirm_signup_post, # New trigger dependency
       aws_api_gateway_integration.confirm_signup_integration, # New trigger dependency
+      aws_api_gateway_method.refresh_post, # Added
+      aws_api_gateway_integration.refresh_integration, # Added
     ]))
   }
 
@@ -429,6 +455,14 @@ resource "aws_lambda_permission" "api_gateway_auth_confirm_signup" {
   function_name = aws_lambda_function.api_lambda.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/POST/auth/confirm-signup"
+}
+
+resource "aws_lambda_permission" "api_gateway_auth_refresh" {
+  statement_id  = "AllowExecutionFromAPIGatewayAuthRefresh"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/POST/auth/refresh"
 }
 
 output "api_key_value" {
