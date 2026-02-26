@@ -38,8 +38,19 @@ resource "aws_iam_policy" "dynamodb_access" {
         Effect   = "Allow"
         Resource = [
             var.finance_items_table_arn,
-            var.finance_history_table_arn
+            var.finance_history_table_arn,
+            var.finance_item_history_table_arn
         ]
+      },
+      {
+        Action = [
+          "dynamodb:DescribeStream",
+          "dynamodb:GetRecords",
+          "dynamodb:GetShardIterator",
+          "dynamodb:ListStreams"
+        ]
+        Effect   = "Allow"
+        Resource = var.finance_items_stream_arn
       },
       {
         Action = [
@@ -79,10 +90,36 @@ resource "aws_lambda_function" "api_lambda" {
 
   environment {
     variables = {
-      ITEMS_TABLE_NAME     = var.finance_items_table_name
-      HISTORY_TABLE_NAME   = var.finance_history_table_name
+      ITEMS_TABLE_NAME        = var.finance_items_table_name
+      HISTORY_TABLE_NAME      = var.finance_history_table_name
+      ITEM_HISTORY_TABLE_NAME = var.finance_item_history_table_name
     }
   }
+}
+
+# History Processor Lambda
+resource "aws_lambda_function" "history_processor" {
+  filename      = data.archive_file.lambda_zip.output_path
+  function_name = "${var.project_name}-history-processor"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "history_processor.handler"
+  runtime       = "nodejs20.x"
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  timeout       = 30
+
+  environment {
+    variables = {
+      ITEM_HISTORY_TABLE_NAME = var.finance_item_history_table_name
+    }
+  }
+}
+
+# DynamoDB Stream Event Source Mapping
+resource "aws_lambda_event_source_mapping" "item_history" {
+  event_source_arn  = var.finance_items_stream_arn
+  function_name     = aws_lambda_function.history_processor.arn
+  starting_position = "LATEST"
+  batch_size        = 10
 }
 
 # API Gateway (REST API)

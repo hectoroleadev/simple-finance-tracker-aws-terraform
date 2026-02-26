@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, ScanCommand, BatchWriteCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, ScanCommand, BatchWriteCommand, DeleteCommand, QueryCommand } = require("@aws-sdk/lib-dynamodb");
 const { z } = require("zod");
 
 const client = new DynamoDBClient({});
@@ -87,6 +87,17 @@ exports.handler = async (event) => {
                     body: JSON.stringify({ message: "Missing id in path" }),
                 };
             }
+        } else if (path.match(/^\/items\/[^/]+\/history\/?$/) && method === "GET") {
+            const id = path.split("/")[2];
+            if (id) {
+                return await getItemHistory(id);
+            } else {
+                return {
+                    statusCode: 400,
+                    headers,
+                    body: JSON.stringify({ message: "Missing id in path" }),
+                };
+            }
         }
 
         return {
@@ -111,6 +122,23 @@ async function getItems() {
         statusCode: 200,
         headers,
         body: JSON.stringify({ items: response.Items }),
+    };
+}
+
+async function getItemHistory(itemId) {
+    const command = new QueryCommand({
+        TableName: process.env.ITEM_HISTORY_TABLE_NAME,
+        KeyConditionExpression: "itemId = :itemId",
+        ExpressionAttributeValues: {
+            ":itemId": itemId
+        },
+        ScanIndexForward: false
+    });
+    const response = await docClient.send(command);
+    return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ history: response.Items }),
     };
 }
 

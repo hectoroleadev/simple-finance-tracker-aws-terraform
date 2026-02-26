@@ -18,6 +18,18 @@ variable "finance_history_table_arn" {
     type = string
 }
 
+variable "finance_items_stream_arn" {
+  type = string
+}
+
+variable "finance_item_history_table_name" {
+  type = string
+}
+
+variable "finance_item_history_table_arn" {
+  type = string
+}
+
 variable "user_pool_id" {
   description = "The ID of the Cognito User Pool."
   type        = string

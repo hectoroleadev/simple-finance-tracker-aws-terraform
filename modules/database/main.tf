@@ -8,6 +8,9 @@ resource "aws_dynamodb_table" "finance_items" {
     type = "S"
   }
 
+  stream_enabled   = true
+  stream_view_type = "NEW_AND_OLD_IMAGES"
+
   tags = {
     Name        = "${var.project_name}-items"
     Environment = "production"
@@ -35,5 +38,27 @@ resource "aws_dynamodb_table" "finance_history" {
 
   lifecycle {
     prevent_destroy = true
+  }
+}
+
+resource "aws_dynamodb_table" "finance_item_history" {
+  name           = "${var.project_name}-item-history"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "itemId"
+  range_key      = "timestamp"
+
+  attribute {
+    name = "itemId"
+    type = "S"
+  }
+
+  attribute {
+    name = "timestamp"
+    type = "S"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-item-history"
+    Environment = "production"
   }
 }
