@@ -39,7 +39,8 @@ resource "aws_iam_policy" "dynamodb_access" {
         Resource = [
             var.finance_items_table_arn,
             var.finance_history_table_arn,
-            var.finance_item_history_table_arn
+            var.finance_item_history_table_arn,
+            var.finance_categories_table_arn
         ]
       },
       {
@@ -93,6 +94,7 @@ resource "aws_lambda_function" "api_lambda" {
       ITEMS_TABLE_NAME        = var.finance_items_table_name
       HISTORY_TABLE_NAME      = var.finance_history_table_name
       ITEM_HISTORY_TABLE_NAME = var.finance_item_history_table_name
+      CATEGORIES_TABLE_NAME   = var.finance_categories_table_name
     }
   }
 }

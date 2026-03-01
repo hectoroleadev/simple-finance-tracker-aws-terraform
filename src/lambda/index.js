@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, ScanCommand, BatchWriteCommand, DeleteCommand, QueryCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, ScanCommand, BatchWriteCommand, DeleteCommand, QueryCommand, PutCommand } = require("@aws-sdk/lib-dynamodb");
 const { z } = require("zod");
 
 const client = new DynamoDBClient({});
@@ -7,13 +7,21 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 const ITEMS_TABLE = process.env.ITEMS_TABLE_NAME;
 const HISTORY_TABLE = process.env.HISTORY_TABLE_NAME;
+const CATEGORIES_TABLE = process.env.CATEGORIES_TABLE_NAME;
 
 // Validation Schemas
 const FinanceItemSchema = z.object({
     id: z.string().uuid().or(z.string().regex(/^h\d+$/)), // Supports UUID and legacy IDs
     name: z.string().min(1),
     amount: z.number(),
-    category: z.enum(["investments", "liquid_cash", "pending_payments", "retirement", "debt"]),
+    category: z.string().min(1), // Now accepts any string (category ID or legacy name)
+});
+
+const CategorySchema = z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    effect: z.enum(["POSITIVE", "NEGATIVE", "INFORMATIVE"]),
+    color: z.string().optional(),
 });
 
 const HistoryEntrySchema = z.object({
@@ -97,6 +105,16 @@ exports.handler = async (event) => {
                     headers,
                     body: JSON.stringify({ message: "Missing id in path" }),
                 };
+            }
+        } else if (path === "/categories" || path === "/categories/") {
+            if (method === "GET") {
+                return await getCategories();
+            } else if (method === "POST") {
+                const body = JSON.parse(event.body);
+                if (body.categories) {
+                    return await saveCategories(body.categories);
+                }
+                return { statusCode: 400, headers, body: JSON.stringify({ message: "Missing categories in body" }) };
             }
         }
 
@@ -258,5 +276,63 @@ async function deleteHistoryItem(id) {
         statusCode: 200,
         headers,
         body: JSON.stringify({ message: "History item deleted successfully" }),
+    };
+}
+
+// --- Categories ---
+
+async function getCategories() {
+    const command = new ScanCommand({ TableName: CATEGORIES_TABLE });
+    const response = await docClient.send(command);
+    return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ categories: response.Items }),
+    };
+}
+
+async function saveCategories(categories) {
+    const validation = z.array(CategorySchema).safeParse(categories);
+    if (!validation.success) {
+        return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ message: "Invalid categories format", errors: validation.error.format() }),
+        };
+    }
+
+    // To ensure a full sync (including deletes), we need to find what's currently in DB
+    const currentResponse = await docClient.send(new ScanCommand({ TableName: CATEGORIES_TABLE }));
+    const existingIds = (currentResponse.Items || []).map(cat => cat.id);
+    const incomingIds = new Set(categories.map(cat => cat.id));
+
+    // IDs to delete: those in DB but NOT in incoming
+    const toDelete = existingIds.filter(id => !incomingIds.has(id));
+
+    // Combine puts and deletes
+    const allRequests = [
+        ...categories.map(cat => ({ PutRequest: { Item: cat } })),
+        ...toDelete.map(id => ({ DeleteRequest: { Key: { id } } }))
+    ];
+
+    if (allRequests.length === 0) {
+        return { statusCode: 200, headers, body: JSON.stringify({ message: "No categories to save" }) };
+    }
+
+    const chunks = chunkArray(allRequests, 25);
+
+    for (const chunk of chunks) {
+        const command = new BatchWriteCommand({
+            RequestItems: {
+                [CATEGORIES_TABLE]: chunk,
+            },
+        });
+        await docClient.send(command);
+    }
+
+    return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ message: "Categories synced successfully" }),
     };
 }

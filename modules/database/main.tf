@@ -62,3 +62,23 @@ resource "aws_dynamodb_table" "finance_item_history" {
     Environment = "production"
   }
 }
+
+resource "aws_dynamodb_table" "finance_categories" {
+  name           = "${var.project_name}-categories"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-categories"
+    Environment = "production"
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}

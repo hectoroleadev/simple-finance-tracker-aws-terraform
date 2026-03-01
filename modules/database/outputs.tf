@@ -25,3 +25,11 @@ output "finance_item_history_table_name" {
 output "finance_item_history_table_arn" {
   value = aws_dynamodb_table.finance_item_history.arn
 }
+
+output "finance_categories_table_name" {
+  value = aws_dynamodb_table.finance_categories.name
+}
+
+output "finance_categories_table_arn" {
+  value = aws_dynamodb_table.finance_categories.arn
+}
