@@ -20,7 +20,7 @@ const FinanceItemSchema = z.object({
 const CategorySchema = z.object({
     id: z.string().min(1),
     name: z.string().min(1),
-    effect: z.enum(["POSITIVE", "NEGATIVE", "INFORMATIVE"]),
+    effect: z.enum(["POSITIVE", "NEGATIVE", "INFORMATIVE", "INFORMATIVE_STAT"]),
     color: z.string().optional(),
 });
 
