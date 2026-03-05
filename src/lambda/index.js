@@ -22,6 +22,7 @@ const CategorySchema = z.object({
     name: z.string().min(1),
     effect: z.enum(["POSITIVE", "NEGATIVE", "INFORMATIVE", "INFORMATIVE_STAT"]),
     color: z.string().optional(),
+    order: z.number().optional(),
 });
 
 const HistoryEntrySchema = z.object({
