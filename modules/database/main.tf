@@ -1,7 +1,7 @@
 resource "aws_dynamodb_table" "finance_items" {
-  name           = "${var.project_name}-items"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
+  name         = "${var.project_name}-items"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
 
   attribute {
     name = "id"
@@ -22,9 +22,9 @@ resource "aws_dynamodb_table" "finance_items" {
 }
 
 resource "aws_dynamodb_table" "finance_history" {
-  name           = "${var.project_name}-history"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
+  name         = "${var.project_name}-history"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
 
   attribute {
     name = "id"
@@ -42,10 +42,10 @@ resource "aws_dynamodb_table" "finance_history" {
 }
 
 resource "aws_dynamodb_table" "finance_item_history" {
-  name           = "${var.project_name}-item-history"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "itemId"
-  range_key      = "timestamp"
+  name         = "${var.project_name}-item-history"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "itemId"
+  range_key    = "timestamp"
 
   attribute {
     name = "itemId"
@@ -64,9 +64,9 @@ resource "aws_dynamodb_table" "finance_item_history" {
 }
 
 resource "aws_dynamodb_table" "finance_categories" {
-  name           = "${var.project_name}-categories"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
+  name         = "${var.project_name}-categories"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
 
   attribute {
     name = "id"

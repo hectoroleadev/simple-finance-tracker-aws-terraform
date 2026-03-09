@@ -35,12 +35,12 @@ resource "aws_iam_policy" "dynamodb_access" {
           "dynamodb:BatchGetItem",
           "dynamodb:BatchWriteItem"
         ]
-        Effect   = "Allow"
+        Effect = "Allow"
         Resource = [
-            var.finance_items_table_arn,
-            var.finance_history_table_arn,
-            var.finance_item_history_table_arn,
-            var.finance_categories_table_arn
+          var.finance_items_table_arn,
+          var.finance_history_table_arn,
+          var.finance_item_history_table_arn,
+          var.finance_categories_table_arn
         ]
       },
       {
@@ -55,11 +55,11 @@ resource "aws_iam_policy" "dynamodb_access" {
       },
       {
         Action = [
-            "logs:CreateLogGroup",
-            "logs:CreateLogStream",
-            "logs:PutLogEvents"
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
         ]
-        Effect = "Allow"
+        Effect   = "Allow"
         Resource = "arn:aws:logs:*:*:*"
       }
     ]
@@ -80,13 +80,13 @@ data "archive_file" "lambda_zip" {
 
 # Lambda Function
 resource "aws_lambda_function" "api_lambda" {
-  filename      = data.archive_file.lambda_zip.output_path
-  function_name = "${var.project_name}-api"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "nodejs20.x"
+  filename         = data.archive_file.lambda_zip.output_path
+  function_name    = "${var.project_name}-api"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs20.x"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  timeout       = 10
+  timeout          = 10
 
 
   environment {
@@ -101,13 +101,13 @@ resource "aws_lambda_function" "api_lambda" {
 
 # History Processor Lambda
 resource "aws_lambda_function" "history_processor" {
-  filename      = data.archive_file.lambda_zip.output_path
-  function_name = "${var.project_name}-history-processor"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "history_processor.handler"
-  runtime       = "nodejs20.x"
+  filename         = data.archive_file.lambda_zip.output_path
+  function_name    = "${var.project_name}-history-processor"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "history_processor.handler"
+  runtime          = "nodejs20.x"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  timeout       = 30
+  timeout          = 30
 
   environment {
     variables = {
@@ -133,11 +133,11 @@ data "aws_caller_identity" "current" {}
 
 # Cognito Authorizer
 resource "aws_api_gateway_authorizer" "cognito_authorizer" {
-  name                   = "${var.project_name}-cognito-authorizer"
-  rest_api_id            = aws_api_gateway_rest_api.api.id
-  type                   = "COGNITO_USER_POOLS"
-  identity_source        = "method.request.header.Authorization"
-  provider_arns          = [
+  name            = "${var.project_name}-cognito-authorizer"
+  rest_api_id     = aws_api_gateway_rest_api.api.id
+  type            = "COGNITO_USER_POOLS"
+  identity_source = "method.request.header.Authorization"
+  provider_arns = [
     "arn:aws:cognito-idp:${var.aws_region}:${data.aws_caller_identity.current.account_id}:userpool/${var.user_pool_id}"
   ]
 }
@@ -149,11 +149,11 @@ resource "aws_api_gateway_resource" "proxy" {
 }
 
 resource "aws_api_gateway_method" "proxy_get" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.proxy.id
-  http_method   = "GET"
-  authorization = "COGNITO_USER_POOLS" # Use Cognito Authorizer
-  authorizer_id = aws_api_gateway_authorizer.cognito_authorizer.id
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_resource.proxy.id
+  http_method      = "GET"
+  authorization    = "COGNITO_USER_POOLS" # Use Cognito Authorizer
+  authorizer_id    = aws_api_gateway_authorizer.cognito_authorizer.id
   api_key_required = false # No API key needed with Cognito Auth
 }
 
@@ -168,11 +168,11 @@ resource "aws_api_gateway_integration" "lambda_get" {
 }
 
 resource "aws_api_gateway_method" "proxy_post" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.proxy.id
-  http_method   = "POST"
-  authorization = "COGNITO_USER_POOLS" # Use Cognito Authorizer
-  authorizer_id = aws_api_gateway_authorizer.cognito_authorizer.id
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_resource.proxy.id
+  http_method      = "POST"
+  authorization    = "COGNITO_USER_POOLS" # Use Cognito Authorizer
+  authorizer_id    = aws_api_gateway_authorizer.cognito_authorizer.id
   api_key_required = false # No API key needed with Cognito Auth
 }
 
@@ -187,11 +187,11 @@ resource "aws_api_gateway_integration" "lambda_post" {
 }
 
 resource "aws_api_gateway_method" "proxy_delete" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.proxy.id
-  http_method   = "DELETE"
-  authorization = "COGNITO_USER_POOLS" # Use Cognito Authorizer
-  authorizer_id = aws_api_gateway_authorizer.cognito_authorizer.id
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_resource.proxy.id
+  http_method      = "DELETE"
+  authorization    = "COGNITO_USER_POOLS" # Use Cognito Authorizer
+  authorizer_id    = aws_api_gateway_authorizer.cognito_authorizer.id
   api_key_required = false # No API key needed with Cognito Auth
 }
 
@@ -206,30 +206,30 @@ resource "aws_api_gateway_integration" "lambda_delete" {
 }
 
 resource "aws_api_gateway_method" "proxy_root" {
-   rest_api_id   = aws_api_gateway_rest_api.api.id
-   resource_id   = aws_api_gateway_rest_api.api.root_resource_id
-   http_method   = "ANY"
-   authorization = "COGNITO_USER_POOLS" # Use Cognito Authorizer
-   authorizer_id = aws_api_gateway_authorizer.cognito_authorizer.id
-   api_key_required = false # No API key needed with Cognito Auth
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_rest_api.api.root_resource_id
+  http_method      = "ANY"
+  authorization    = "COGNITO_USER_POOLS" # Use Cognito Authorizer
+  authorizer_id    = aws_api_gateway_authorizer.cognito_authorizer.id
+  api_key_required = false # No API key needed with Cognito Auth
 }
 
 resource "aws_api_gateway_integration" "lambda_root" {
-   rest_api_id = aws_api_gateway_rest_api.api.id
-   resource_id = aws_api_gateway_method.proxy_root.resource_id
-   http_method = aws_api_gateway_method.proxy_root.http_method
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_method.proxy_root.resource_id
+  http_method = aws_api_gateway_method.proxy_root.http_method
 
-   integration_http_method = "POST"
-   type                    = "AWS_PROXY"
-   uri                     = aws_lambda_function.api_lambda.invoke_arn
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.api_lambda.invoke_arn
 }
 
 # CORS for /{proxy+} resource
 resource "aws_api_gateway_method" "proxy_options" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.proxy.id
-  http_method   = "OPTIONS"
-  authorization = "NONE"
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_resource.proxy.id
+  http_method      = "OPTIONS"
+  authorization    = "NONE"
   api_key_required = false # Crucial for preflight requests
 }
 
@@ -250,7 +250,7 @@ resource "aws_api_gateway_method_response" "proxy_options_response" {
   status_code = "200"
   response_models = {
     "application/json" = "Empty"
-    
+
   }
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = true,
@@ -360,5 +360,43 @@ resource "aws_lambda_permission" "api_gateway" {
 
 output "api_key_value" {
   value = aws_api_gateway_api_key.main.value
+}
+
+# --- Custom Domain Configuration ---
+
+# Request ACM Certificate for the custom domain
+resource "aws_acm_certificate" "api_cert" {
+  domain_name       = var.api_domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "${var.project_name}-cert"
+  }
+}
+
+# This resource represents the successful validation of the certificate.
+resource "aws_acm_certificate_validation" "api_cert_validation" {
+  certificate_arn = aws_acm_certificate.api_cert.arn
+}
+
+# API Gateway Custom Domain Name (Regional)
+resource "aws_api_gateway_domain_name" "api_custom_domain" {
+  domain_name              = var.api_domain_name
+  regional_certificate_arn = aws_acm_certificate_validation.api_cert_validation.certificate_arn
+
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+}
+
+# Map the custom domain to the 'prod' stage
+resource "aws_api_gateway_base_path_mapping" "api_mapping" {
+  api_id      = aws_api_gateway_rest_api.api.id
+  stage_name  = aws_api_gateway_stage.api.stage_name
+  domain_name = aws_api_gateway_domain_name.api_custom_domain.domain_name
 }
 

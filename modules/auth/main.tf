@@ -6,9 +6,9 @@ resource "aws_cognito_user_pool" "user_pool" {
   auto_verified_attributes = ["email"]
 
   schema {
-    name     = "email"
-    required = true
-    mutable  = true
+    name                = "email"
+    required            = true
+    mutable             = true
     attribute_data_type = "String"
   }
 
@@ -25,8 +25,8 @@ resource "aws_cognito_user_pool" "user_pool" {
 
 # Cognito User Pool Client
 resource "aws_cognito_user_pool_client" "user_pool_client" {
-  name         = "${var.project_name}-user-pool-client"
-  user_pool_id = aws_cognito_user_pool.user_pool.id
+  name                = "${var.project_name}-user-pool-client"
+  user_pool_id        = aws_cognito_user_pool.user_pool.id
   explicit_auth_flows = ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_SRP_AUTH"]
 }
 
@@ -36,8 +36,8 @@ resource "aws_cognito_identity_pool" "identity_pool" {
   allow_unauthenticated_identities = false # Set to true if you need unauthenticated access
 
   cognito_identity_providers {
-    client_id              = aws_cognito_user_pool_client.user_pool_client.id
-    provider_name          = replace(aws_cognito_user_pool.user_pool.endpoint, "https://", "")
+    client_id               = aws_cognito_user_pool_client.user_pool_client.id
+    provider_name           = replace(aws_cognito_user_pool.user_pool.endpoint, "https://", "")
     server_side_token_check = false
   }
 }
@@ -119,18 +119,18 @@ resource "aws_iam_policy" "cognito_auth_dynamodb_readonly_policy" {
           "dynamodb:Query",
           "dynamodb:Scan"
         ]
-        Effect   = "Allow"
+        Effect = "Allow"
         Resource = [
-            var.finance_items_table_arn,
-            var.finance_history_table_arn
+          var.finance_items_table_arn,
+          var.finance_history_table_arn
         ]
       },
       {
         Action = [
-            "mobileanalytics:PutEvents",
-            "cognito-sync:*"
+          "mobileanalytics:PutEvents",
+          "cognito-sync:*"
         ]
-        Effect = "Allow"
+        Effect   = "Allow"
         Resource = "*"
       }
     ]

@@ -11,11 +11,11 @@ variable "finance_items_table_arn" {
 }
 
 variable "finance_history_table_name" {
-    type = string
+  type = string
 }
 
 variable "finance_history_table_arn" {
-    type = string
+  type = string
 }
 
 variable "finance_items_stream_arn" {
@@ -50,5 +50,10 @@ variable "user_pool_client_id" {
 
 variable "aws_region" {
   description = "The AWS region where resources are deployed."
+  type        = string
+}
+
+variable "api_domain_name" {
+  description = "The custom domain name for the API Gateway."
   type        = string
 }

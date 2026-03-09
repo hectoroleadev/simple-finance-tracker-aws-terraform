@@ -32,3 +32,13 @@ output "finance_history_table_name" {
   description = "The name of the finance history DynamoDB table."
   value       = module.database.finance_history_table_name
 }
+
+output "acm_validation_options" {
+  description = "DNS validation records for the ACM certificate. Add these to Squarespace."
+  value       = module.backend.acm_validation_options
+}
+
+output "api_gateway_target" {
+  description = "The target AWS domain for the custom api-test record in Squarespace."
+  value       = module.backend.api_gateway_regional_domain_name
+}
