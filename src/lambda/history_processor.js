@@ -40,6 +40,7 @@ exports.handler = async (event) => {
                 name: itemData.name,
                 amount: itemData.amount,
                 category: itemData.category,
+                userId: itemData.userId, // Propagate userId for easier querying
                 raw: itemData // Keep full copy just in case
             };
 

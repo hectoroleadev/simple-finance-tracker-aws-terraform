@@ -49,7 +49,12 @@ exports.handler = async (event) => {
     // Support both HTTP API (v2) and REST API (v1)
     const method = event.httpMethod || event.requestContext?.http?.method;
     const path = event.path || event.rawPath;
-    const userClaims = event.requestContext?.authorizer?.claims; // Extract claims
+
+    // Extract userId from Cognito claims. 
+    // Fallback to 'anonymous' if no claims found (should not happen with authorizer)
+    const userClaims = event.requestContext?.authorizer?.claims;
+    const userId = userClaims?.['cognito:username'] || userClaims?.sub || 'anonymous';
+    const isHector = userId === 'hector';
 
     if (method === "OPTIONS") {
         return { statusCode: 200, headers, body: "" };
@@ -58,17 +63,17 @@ exports.handler = async (event) => {
     try {
         if (path === "/items" || path === "/items/") {
             if (method === "GET") {
-                return await getItems();
+                return await getItems(userId, isHector);
             } else if (method === "POST") {
                 const body = JSON.parse(event.body);
                 if (body.items) {
-                    return await saveItems(body.items);
+                    return await saveItems(body.items, userId);
                 }
             }
         } else if (path.startsWith("/items/") && method === "DELETE") {
             const id = path.split("/").pop();
             if (id) {
-                return await deleteItem(id);
+                return await deleteItem(id, userId, isHector);
             } else {
                 return {
                     statusCode: 400,
@@ -78,17 +83,17 @@ exports.handler = async (event) => {
             }
         } else if (path === "/history") {
             if (method === "GET") {
-                return await getHistory();
+                return await getHistory(userId, isHector);
             } else if (method === "POST") {
                 const body = JSON.parse(event.body);
                 if (body.history) {
-                    return await saveHistory(body.history);
+                    return await saveHistory(body.history, userId);
                 }
             }
         } else if (path.startsWith("/history/") && method === "DELETE") {
             const id = path.split("/").pop();
             if (id) {
-                return await deleteHistoryItem(id);
+                return await deleteHistoryItem(id, userId, isHector);
             } else {
                 return {
                     statusCode: 400,
@@ -99,7 +104,7 @@ exports.handler = async (event) => {
         } else if (path.match(/^\/items\/[^/]+\/history\/?$/) && method === "GET") {
             const id = path.split("/")[2];
             if (id) {
-                return await getItemHistory(id);
+                return await getItemHistory(id, userId, isHector);
             } else {
                 return {
                     statusCode: 400,
@@ -109,11 +114,11 @@ exports.handler = async (event) => {
             }
         } else if (path === "/categories" || path === "/categories/") {
             if (method === "GET") {
-                return await getCategories();
+                return await getCategories(userId, isHector);
             } else if (method === "POST") {
                 const body = JSON.parse(event.body);
                 if (body.categories) {
-                    return await saveCategories(body.categories);
+                    return await saveCategories(body.categories, userId, isHector);
                 }
                 return { statusCode: 400, headers, body: JSON.stringify({ message: "Missing categories in body" }) };
             }
@@ -134,8 +139,14 @@ exports.handler = async (event) => {
     }
 };
 
-async function getItems() {
-    const command = new ScanCommand({ TableName: ITEMS_TABLE });
+async function getItems(userId, isHector) {
+    const params = {
+        TableName: ITEMS_TABLE,
+        FilterExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        ExpressionAttributeValues: { ":uid": userId }
+    };
+
+    const command = new ScanCommand(params);
     const response = await docClient.send(command);
     return {
         statusCode: 200,
@@ -144,7 +155,24 @@ async function getItems() {
     };
 }
 
-async function getItemHistory(itemId) {
+async function getItemHistory(itemId, userId, isHector) {
+    // First, verify the item belongs to the user
+    const checkItemCommand = new QueryCommand({
+        TableName: ITEMS_TABLE,
+        KeyConditionExpression: "id = :id",
+        ExpressionAttributeValues: { ":id": itemId }
+    });
+    const checkItemResponse = await docClient.send(checkItemCommand);
+    const item = checkItemResponse.Items?.[0];
+
+    if (!item || (item.userId !== userId && !(isHector && !item.userId))) {
+        return {
+            statusCode: 403,
+            headers,
+            body: JSON.stringify({ message: "Forbidden: You do not have access to this item's history" })
+        };
+    }
+
     const command = new QueryCommand({
         TableName: process.env.ITEM_HISTORY_TABLE_NAME,
         KeyConditionExpression: "itemId = :itemId",
@@ -161,7 +189,7 @@ async function getItemHistory(itemId) {
     };
 }
 
-async function saveItems(items) {
+async function saveItems(items, userId) {
     // Validation
     const validation = z.array(FinanceItemSchema).safeParse(items);
     if (!validation.success) {
@@ -176,8 +204,11 @@ async function saveItems(items) {
         return { statusCode: 200, headers, body: JSON.stringify({ message: "No items to save" }) };
     }
 
+    // Assign userId to all items
+    const itemsWithUser = items.map(item => ({ ...item, userId }));
+
     // DynamoDB BatchWrite limit is 25
-    const chunks = chunkArray(items, 25);
+    const chunks = chunkArray(itemsWithUser, 25);
 
     for (const chunk of chunks) {
         const putRequests = chunk.map((item) => ({
@@ -199,8 +230,14 @@ async function saveItems(items) {
     };
 }
 
-async function getHistory() {
-    const command = new ScanCommand({ TableName: HISTORY_TABLE });
+async function getHistory(userId, isHector) {
+    const params = {
+        TableName: HISTORY_TABLE,
+        FilterExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        ExpressionAttributeValues: { ":uid": userId }
+    };
+
+    const command = new ScanCommand(params);
     const response = await docClient.send(command);
     return {
         statusCode: 200,
@@ -209,7 +246,7 @@ async function getHistory() {
     };
 }
 
-async function saveHistory(historyEntries) {
+async function saveHistory(historyEntries, userId) {
     // Validation
     const validation = z.array(HistoryEntrySchema).safeParse(historyEntries);
     if (!validation.success) {
@@ -224,7 +261,10 @@ async function saveHistory(historyEntries) {
         return { statusCode: 200, headers, body: JSON.stringify({ message: "No history to save" }) };
     }
 
-    const chunks = chunkArray(historyEntries, 25);
+    // Assign userId to all entries
+    const entriesWithUser = historyEntries.map(entry => ({ ...entry, userId }));
+
+    const chunks = chunkArray(entriesWithUser, 25);
 
     for (const chunk of chunks) {
         const putRequests = chunk.map((entry) => ({
@@ -254,36 +294,68 @@ function chunkArray(array, size) {
     return chunks;
 }
 
-async function deleteItem(id) {
+async function deleteItem(id, userId, isHector) {
     const command = new DeleteCommand({
         TableName: ITEMS_TABLE,
         Key: { id },
+        ConditionExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        ExpressionAttributeValues: { ":uid": userId }
     });
-    await docClient.send(command);
-    return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ message: "Item deleted successfully" }),
-    };
+    try {
+        await docClient.send(command);
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ message: "Item deleted successfully" }),
+        };
+    } catch (err) {
+        if (err.name === "ConditionalCheckFailedException") {
+            return {
+                statusCode: 403,
+                headers,
+                body: JSON.stringify({ message: "Forbidden: You do not have permission to delete this item" }),
+            };
+        }
+        throw err;
+    }
 }
 
-async function deleteHistoryItem(id) {
+async function deleteHistoryItem(id, userId, isHector) {
     const command = new DeleteCommand({
         TableName: HISTORY_TABLE,
         Key: { id },
+        ConditionExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        ExpressionAttributeValues: { ":uid": userId }
     });
-    await docClient.send(command);
-    return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ message: "History item deleted successfully" }),
-    };
+    try {
+        await docClient.send(command);
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ message: "History item deleted successfully" }),
+        };
+    } catch (err) {
+        if (err.name === "ConditionalCheckFailedException") {
+            return {
+                statusCode: 403,
+                headers,
+                body: JSON.stringify({ message: "Forbidden: You do not have permission to delete this history item" }),
+            };
+        }
+        throw err;
+    }
 }
 
 // --- Categories ---
 
-async function getCategories() {
-    const command = new ScanCommand({ TableName: CATEGORIES_TABLE });
+async function getCategories(userId, isHector) {
+    const params = {
+        TableName: CATEGORIES_TABLE,
+        FilterExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        ExpressionAttributeValues: { ":uid": userId }
+    };
+
+    const command = new ScanCommand(params);
     const response = await docClient.send(command);
     return {
         statusCode: 200,
@@ -292,7 +364,7 @@ async function getCategories() {
     };
 }
 
-async function saveCategories(categories) {
+async function saveCategories(categories, userId, isHector) {
     const validation = z.array(CategorySchema).safeParse(categories);
     if (!validation.success) {
         return {
@@ -302,17 +374,25 @@ async function saveCategories(categories) {
         };
     }
 
-    // To ensure a full sync (including deletes), we need to find what's currently in DB
-    const currentResponse = await docClient.send(new ScanCommand({ TableName: CATEGORIES_TABLE }));
+    // Attach userId to incoming categories
+    const categoriesWithUser = categories.map(cat => ({ ...cat, userId }));
+
+    // To ensure a full sync (including deletes) for THIS user, we need to find what's currently in DB for them
+    const currentResponse = await docClient.send(new ScanCommand({
+        TableName: CATEGORIES_TABLE,
+        FilterExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        ExpressionAttributeValues: { ":uid": userId }
+    }));
+
     const existingIds = (currentResponse.Items || []).map(cat => cat.id);
     const incomingIds = new Set(categories.map(cat => cat.id));
 
-    // IDs to delete: those in DB but NOT in incoming
+    // IDs to delete: those in DB for this user but NOT in incoming
     const toDelete = existingIds.filter(id => !incomingIds.has(id));
 
     // Combine puts and deletes
     const allRequests = [
-        ...categories.map(cat => ({ PutRequest: { Item: cat } })),
+        ...categoriesWithUser.map(cat => ({ PutRequest: { Item: cat } })),
         ...toDelete.map(id => ({ DeleteRequest: { Key: { id } } }))
     ];
 
