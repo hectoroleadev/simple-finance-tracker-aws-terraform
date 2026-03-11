@@ -23,6 +23,8 @@ module "backend" {
   user_pool_client_id             = module.auth.user_pool_client_id
   aws_region                      = var.aws_region
   api_domain_name                 = var.api_domain_name
+  user_shares_table_name          = module.database.user_shares_table_name
+  user_shares_table_arn           = module.database.user_shares_table_arn
 }
 
 module "auth" {

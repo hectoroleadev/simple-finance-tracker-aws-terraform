@@ -38,9 +38,15 @@ resource "aws_iam_policy" "dynamodb_access" {
         Effect = "Allow"
         Resource = [
           var.finance_items_table_arn,
+          "${var.finance_items_table_arn}/*",
           var.finance_history_table_arn,
+          "${var.finance_history_table_arn}/*",
           var.finance_item_history_table_arn,
-          var.finance_categories_table_arn
+          "${var.finance_item_history_table_arn}/*",
+          var.finance_categories_table_arn,
+          "${var.finance_categories_table_arn}/*",
+          var.user_shares_table_arn,
+          "${var.user_shares_table_arn}/*"
         ]
       },
       {
@@ -95,6 +101,7 @@ resource "aws_lambda_function" "api_lambda" {
       HISTORY_TABLE_NAME      = var.finance_history_table_name
       ITEM_HISTORY_TABLE_NAME = var.finance_item_history_table_name
       CATEGORIES_TABLE_NAME   = var.finance_categories_table_name
+      USER_SHARES_TABLE_NAME  = var.user_shares_table_name
     }
   }
 }

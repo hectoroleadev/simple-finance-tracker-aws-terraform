@@ -82,3 +82,31 @@ resource "aws_dynamodb_table" "finance_categories" {
     prevent_destroy = true
   }
 }
+
+resource "aws_dynamodb_table" "user_shares" {
+  name         = "${var.project_name}-user-shares"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "ownerId"
+  range_key    = "sharedWithId"
+
+  attribute {
+    name = "ownerId"
+    type = "S"
+  }
+
+  attribute {
+    name = "sharedWithId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "SharedWithIndex"
+    hash_key        = "sharedWithId"
+    projection_type = "ALL"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-user-shares"
+    Environment = "production"
+  }
+}

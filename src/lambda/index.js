@@ -8,6 +8,8 @@ const docClient = DynamoDBDocumentClient.from(client);
 const ITEMS_TABLE = process.env.ITEMS_TABLE_NAME;
 const HISTORY_TABLE = process.env.HISTORY_TABLE_NAME;
 const CATEGORIES_TABLE = process.env.CATEGORIES_TABLE_NAME;
+const USER_SHARES_TABLE = process.env.USER_SHARES_TABLE_NAME;
+const ITEM_HISTORY_TABLE = process.env.ITEM_HISTORY_TABLE_NAME;
 
 // Validation Schemas
 const FinanceItemSchema = z.object({
@@ -59,10 +61,13 @@ exports.handler = async (event) => {
         return { statusCode: 200, headers, body: "" };
     }
 
+    const queryParams = event.queryStringParameters || {};
+    const targetUserId = queryParams.viewAs && queryParams.viewAs !== userId ? queryParams.viewAs : userId;
+
     try {
         if (path === "/items" || path === "/items/") {
             if (method === "GET") {
-                return await getItems(userId);
+                return await getItems(targetUserId, userId);
             } else if (method === "POST") {
                 const body = JSON.parse(event.body);
                 if (body.items) {
@@ -82,7 +87,7 @@ exports.handler = async (event) => {
             }
         } else if (path === "/history") {
             if (method === "GET") {
-                return await getHistory(userId);
+                return await getHistory(targetUserId, userId);
             } else if (method === "POST") {
                 const body = JSON.parse(event.body);
                 if (body.history) {
@@ -113,7 +118,7 @@ exports.handler = async (event) => {
             }
         } else if (path === "/categories" || path === "/categories/") {
             if (method === "GET") {
-                return await getCategories(userId);
+                return await getCategories(targetUserId, userId);
             } else if (method === "POST") {
                 const body = JSON.parse(event.body);
                 if (body.categories) {
@@ -121,6 +126,18 @@ exports.handler = async (event) => {
                 }
                 return { statusCode: 400, headers, body: JSON.stringify({ message: "Missing categories in body" }) };
             }
+        } else if (path === "/shares" || path === "/shares/") {
+            if (method === "GET") {
+                return await getMyShares(userId);
+            } else if (method === "POST") {
+                const body = JSON.parse(event.body);
+                return await createShare(userId, body.sharedWithId);
+            }
+        } else if (path.startsWith("/shares/") && method === "DELETE") {
+            const sharedWithId = path.split("/").pop();
+            return await deleteShare(userId, sharedWithId);
+        } else if (path === "/shared-with-me") {
+            return await getSharedWithMe(userId);
         }
 
         return {
@@ -138,11 +155,18 @@ exports.handler = async (event) => {
     }
 };
 
-async function getItems(userId) {
+async function getItems(targetUserId, requesterId) {
+    if (targetUserId !== requesterId) {
+        const hasAccess = await checkAccess(targetUserId, requesterId);
+        if (!hasAccess) {
+            return { statusCode: 403, headers, body: JSON.stringify({ message: "Forbidden: No shared access" }) };
+        }
+    }
+
     const params = {
         TableName: ITEMS_TABLE,
         FilterExpression: "userId = :uid",
-        ExpressionAttributeValues: { ":uid": userId }
+        ExpressionAttributeValues: { ":uid": targetUserId }
     };
 
     const command = new ScanCommand(params);
@@ -164,7 +188,7 @@ async function getItemHistory(itemId, userId) {
     const checkItemResponse = await docClient.send(checkItemCommand);
     const item = checkItemResponse.Items?.[0];
 
-    if (!item || item.userId !== userId) {
+    if (!item || (item.userId !== userId && !(await checkAccess(item.userId, userId)))) {
         return {
             statusCode: 403,
             headers,
@@ -229,11 +253,18 @@ async function saveItems(items, userId) {
     };
 }
 
-async function getHistory(userId) {
+async function getHistory(targetUserId, requesterId) {
+    if (targetUserId !== requesterId) {
+        const hasAccess = await checkAccess(targetUserId, requesterId);
+        if (!hasAccess) {
+            return { statusCode: 403, headers, body: JSON.stringify({ message: "Forbidden: No shared access" }) };
+        }
+    }
+
     const params = {
         TableName: HISTORY_TABLE,
         FilterExpression: "userId = :uid",
-        ExpressionAttributeValues: { ":uid": userId }
+        ExpressionAttributeValues: { ":uid": targetUserId }
     };
 
     const command = new ScanCommand(params);
@@ -347,11 +378,18 @@ async function deleteHistoryItem(id, userId) {
 
 // --- Categories ---
 
-async function getCategories(userId) {
+async function getCategories(targetUserId, requesterId) {
+    if (targetUserId !== requesterId) {
+        const hasAccess = await checkAccess(targetUserId, requesterId);
+        if (!hasAccess) {
+            return { statusCode: 403, headers, body: JSON.stringify({ message: "Forbidden: No shared access" }) };
+        }
+    }
+
     const params = {
         TableName: CATEGORIES_TABLE,
         FilterExpression: "userId = :uid",
-        ExpressionAttributeValues: { ":uid": userId }
+        ExpressionAttributeValues: { ":uid": targetUserId }
     };
 
     const command = new ScanCommand(params);
@@ -414,5 +452,90 @@ async function saveCategories(categories, userId) {
         statusCode: 200,
         headers,
         body: JSON.stringify({ message: "Categories synced successfully" }),
+    };
+}
+
+// --- Sharing Functions ---
+
+async function checkAccess(ownerId, requesterId) {
+    const command = new QueryCommand({
+        TableName: USER_SHARES_TABLE,
+        KeyConditionExpression: "ownerId = :ownerId AND sharedWithId = :sharedWithId",
+        ExpressionAttributeValues: {
+            ":ownerId": ownerId,
+            ":sharedWithId": requesterId
+        }
+    });
+    const response = await docClient.send(command);
+    return response.Items && response.Items.length > 0 && response.Items[0].status === "ACTIVE";
+}
+
+async function getMyShares(ownerId) {
+    const command = new QueryCommand({
+        TableName: USER_SHARES_TABLE,
+        KeyConditionExpression: "ownerId = :ownerId",
+        ExpressionAttributeValues: { ":ownerId": ownerId }
+    });
+    const response = await docClient.send(command);
+    return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ shares: response.Items }),
+    };
+}
+
+async function getSharedWithMe(userId) {
+    const command = new QueryCommand({
+        TableName: USER_SHARES_TABLE,
+        IndexName: "SharedWithIndex",
+        KeyConditionExpression: "sharedWithId = :userId",
+        ExpressionAttributeValues: { ":userId": userId }
+    });
+    const response = await docClient.send(command);
+    return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ sharedWithMe: response.Items }),
+    };
+}
+
+async function createShare(ownerId, sharedWithId) {
+    if (!sharedWithId) {
+        return { statusCode: 400, headers, body: JSON.stringify({ message: "sharedWithId is required" }) };
+    }
+    if (ownerId === sharedWithId) {
+        return { statusCode: 400, headers, body: JSON.stringify({ message: "You cannot share with yourself" }) };
+    }
+
+    const share = {
+        ownerId,
+        sharedWithId,
+        permissions: "READ",
+        status: "ACTIVE",
+        createdAt: new Date().toISOString()
+    };
+
+    await docClient.send(new PutCommand({
+        TableName: USER_SHARES_TABLE,
+        Item: share
+    }));
+
+    return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ message: "Share created successfully", share }),
+    };
+}
+
+async function deleteShare(ownerId, sharedWithId) {
+    await docClient.send(new DeleteCommand({
+        TableName: USER_SHARES_TABLE,
+        Key: { ownerId, sharedWithId }
+    }));
+
+    return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ message: "Share removed successfully" }),
     };
 }

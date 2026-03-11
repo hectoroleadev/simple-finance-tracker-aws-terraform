@@ -57,3 +57,11 @@ variable "api_domain_name" {
   description = "The custom domain name for the API Gateway."
   type        = string
 }
+
+variable "user_shares_table_name" {
+  type = string
+}
+
+variable "user_shares_table_arn" {
+  type = string
+}

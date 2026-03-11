@@ -33,3 +33,11 @@ output "finance_categories_table_name" {
 output "finance_categories_table_arn" {
   value = aws_dynamodb_table.finance_categories.arn
 }
+
+output "user_shares_table_name" {
+  value = aws_dynamodb_table.user_shares.name
+}
+
+output "user_shares_table_arn" {
+  value = aws_dynamodb_table.user_shares.arn
+}
