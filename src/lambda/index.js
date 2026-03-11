@@ -54,7 +54,6 @@ exports.handler = async (event) => {
     // Fallback to 'anonymous' if no claims found (should not happen with authorizer)
     const userClaims = event.requestContext?.authorizer?.claims;
     const userId = userClaims?.['cognito:username'] || userClaims?.sub || 'anonymous';
-    const isHector = userId === 'hector';
 
     if (method === "OPTIONS") {
         return { statusCode: 200, headers, body: "" };
@@ -63,7 +62,7 @@ exports.handler = async (event) => {
     try {
         if (path === "/items" || path === "/items/") {
             if (method === "GET") {
-                return await getItems(userId, isHector);
+                return await getItems(userId);
             } else if (method === "POST") {
                 const body = JSON.parse(event.body);
                 if (body.items) {
@@ -73,7 +72,7 @@ exports.handler = async (event) => {
         } else if (path.startsWith("/items/") && method === "DELETE") {
             const id = path.split("/").pop();
             if (id) {
-                return await deleteItem(id, userId, isHector);
+                return await deleteItem(id, userId);
             } else {
                 return {
                     statusCode: 400,
@@ -83,7 +82,7 @@ exports.handler = async (event) => {
             }
         } else if (path === "/history") {
             if (method === "GET") {
-                return await getHistory(userId, isHector);
+                return await getHistory(userId);
             } else if (method === "POST") {
                 const body = JSON.parse(event.body);
                 if (body.history) {
@@ -93,7 +92,7 @@ exports.handler = async (event) => {
         } else if (path.startsWith("/history/") && method === "DELETE") {
             const id = path.split("/").pop();
             if (id) {
-                return await deleteHistoryItem(id, userId, isHector);
+                return await deleteHistoryItem(id, userId);
             } else {
                 return {
                     statusCode: 400,
@@ -104,7 +103,7 @@ exports.handler = async (event) => {
         } else if (path.match(/^\/items\/[^/]+\/history\/?$/) && method === "GET") {
             const id = path.split("/")[2];
             if (id) {
-                return await getItemHistory(id, userId, isHector);
+                return await getItemHistory(id, userId);
             } else {
                 return {
                     statusCode: 400,
@@ -114,11 +113,11 @@ exports.handler = async (event) => {
             }
         } else if (path === "/categories" || path === "/categories/") {
             if (method === "GET") {
-                return await getCategories(userId, isHector);
+                return await getCategories(userId);
             } else if (method === "POST") {
                 const body = JSON.parse(event.body);
                 if (body.categories) {
-                    return await saveCategories(body.categories, userId, isHector);
+                    return await saveCategories(body.categories, userId);
                 }
                 return { statusCode: 400, headers, body: JSON.stringify({ message: "Missing categories in body" }) };
             }
@@ -139,10 +138,10 @@ exports.handler = async (event) => {
     }
 };
 
-async function getItems(userId, isHector) {
+async function getItems(userId) {
     const params = {
         TableName: ITEMS_TABLE,
-        FilterExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        FilterExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": userId }
     };
 
@@ -155,7 +154,7 @@ async function getItems(userId, isHector) {
     };
 }
 
-async function getItemHistory(itemId, userId, isHector) {
+async function getItemHistory(itemId, userId) {
     // First, verify the item belongs to the user
     const checkItemCommand = new QueryCommand({
         TableName: ITEMS_TABLE,
@@ -165,7 +164,7 @@ async function getItemHistory(itemId, userId, isHector) {
     const checkItemResponse = await docClient.send(checkItemCommand);
     const item = checkItemResponse.Items?.[0];
 
-    if (!item || (item.userId !== userId && !(isHector && !item.userId))) {
+    if (!item || item.userId !== userId) {
         return {
             statusCode: 403,
             headers,
@@ -230,10 +229,10 @@ async function saveItems(items, userId) {
     };
 }
 
-async function getHistory(userId, isHector) {
+async function getHistory(userId) {
     const params = {
         TableName: HISTORY_TABLE,
-        FilterExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        FilterExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": userId }
     };
 
@@ -294,11 +293,11 @@ function chunkArray(array, size) {
     return chunks;
 }
 
-async function deleteItem(id, userId, isHector) {
+async function deleteItem(id, userId) {
     const command = new DeleteCommand({
         TableName: ITEMS_TABLE,
         Key: { id },
-        ConditionExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        ConditionExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": userId }
     });
     try {
@@ -320,11 +319,11 @@ async function deleteItem(id, userId, isHector) {
     }
 }
 
-async function deleteHistoryItem(id, userId, isHector) {
+async function deleteHistoryItem(id, userId) {
     const command = new DeleteCommand({
         TableName: HISTORY_TABLE,
         Key: { id },
-        ConditionExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        ConditionExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": userId }
     });
     try {
@@ -348,10 +347,10 @@ async function deleteHistoryItem(id, userId, isHector) {
 
 // --- Categories ---
 
-async function getCategories(userId, isHector) {
+async function getCategories(userId) {
     const params = {
         TableName: CATEGORIES_TABLE,
-        FilterExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        FilterExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": userId }
     };
 
@@ -364,7 +363,7 @@ async function getCategories(userId, isHector) {
     };
 }
 
-async function saveCategories(categories, userId, isHector) {
+async function saveCategories(categories, userId) {
     const validation = z.array(CategorySchema).safeParse(categories);
     if (!validation.success) {
         return {
@@ -380,7 +379,7 @@ async function saveCategories(categories, userId, isHector) {
     // To ensure a full sync (including deletes) for THIS user, we need to find what's currently in DB for them
     const currentResponse = await docClient.send(new ScanCommand({
         TableName: CATEGORIES_TABLE,
-        FilterExpression: isHector ? "userId = :uid OR attribute_not_exists(userId)" : "userId = :uid",
+        FilterExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": userId }
     }));
 

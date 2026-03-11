@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "zod": "^4.3.6",
+    "@aws-sdk/client-dynamodb": "^3.606.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.606.0",
     "@aws-sdk/util-dynamodb": "^3.606.0"
   }
