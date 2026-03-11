@@ -8,6 +8,17 @@ resource "aws_dynamodb_table" "finance_items" {
     type = "S"
   }
 
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "UserIndex"
+    hash_key        = "userId"
+    projection_type = "ALL"
+  }
+
   stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
 
@@ -29,6 +40,23 @@ resource "aws_dynamodb_table" "finance_history" {
   attribute {
     name = "id"
     type = "S"
+  }
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "date"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "UserIndex"
+    hash_key        = "userId"
+    range_key       = "date"
+    projection_type = "ALL"
   }
 
   tags = {
@@ -71,6 +99,17 @@ resource "aws_dynamodb_table" "finance_categories" {
   attribute {
     name = "id"
     type = "S"
+  }
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "UserIndex"
+    hash_key        = "userId"
+    projection_type = "ALL"
   }
 
   tags = {

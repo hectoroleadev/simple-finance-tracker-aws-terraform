@@ -165,11 +165,12 @@ async function getItems(targetUserId, requesterId) {
 
     const params = {
         TableName: ITEMS_TABLE,
-        FilterExpression: "userId = :uid",
+        IndexName: "UserIndex",
+        KeyConditionExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": targetUserId }
     };
 
-    const command = new ScanCommand(params);
+    const command = new QueryCommand(params);
     const response = await docClient.send(command);
     return {
         statusCode: 200,
@@ -263,11 +264,13 @@ async function getHistory(targetUserId, requesterId) {
 
     const params = {
         TableName: HISTORY_TABLE,
-        FilterExpression: "userId = :uid",
-        ExpressionAttributeValues: { ":uid": targetUserId }
+        IndexName: "UserIndex",
+        KeyConditionExpression: "userId = :uid",
+        ExpressionAttributeValues: { ":uid": targetUserId },
+        ScanIndexForward: false // Newest first
     };
 
-    const command = new ScanCommand(params);
+    const command = new QueryCommand(params);
     const response = await docClient.send(command);
     return {
         statusCode: 200,
@@ -388,11 +391,12 @@ async function getCategories(targetUserId, requesterId) {
 
     const params = {
         TableName: CATEGORIES_TABLE,
-        FilterExpression: "userId = :uid",
+        IndexName: "UserIndex",
+        KeyConditionExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": targetUserId }
     };
 
-    const command = new ScanCommand(params);
+    const command = new QueryCommand(params);
     const response = await docClient.send(command);
     return {
         statusCode: 200,
