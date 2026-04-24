@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, ScanCommand, BatchWriteCommand, DeleteCommand, QueryCommand, PutCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, GetCommand, BatchWriteCommand, DeleteCommand, QueryCommand, PutCommand } = require("@aws-sdk/lib-dynamodb");
 const { z } = require("zod");
 
 const client = new DynamoDBClient({});
@@ -163,31 +163,27 @@ async function getItems(targetUserId, requesterId) {
         }
     }
 
-    const params = {
+    const items = await queryAllPages({
         TableName: ITEMS_TABLE,
         IndexName: "UserIndex",
         KeyConditionExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": targetUserId }
-    };
+    });
 
-    const command = new QueryCommand(params);
-    const response = await docClient.send(command);
     return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ items: response.Items }),
+        body: JSON.stringify({ items }),
     };
 }
 
 async function getItemHistory(itemId, userId) {
-    // First, verify the item belongs to the user
-    const checkItemCommand = new QueryCommand({
+    // Verify ownership using GetItem (faster than Query — direct PK lookup)
+    const checkItemResponse = await docClient.send(new GetCommand({
         TableName: ITEMS_TABLE,
-        KeyConditionExpression: "id = :id",
-        ExpressionAttributeValues: { ":id": itemId }
-    });
-    const checkItemResponse = await docClient.send(checkItemCommand);
-    const item = checkItemResponse.Items?.[0];
+        Key: { id: itemId }
+    }));
+    const item = checkItemResponse.Item;
 
     if (!item || (item.userId !== userId && !(await checkAccess(item.userId, userId)))) {
         return {
@@ -197,7 +193,7 @@ async function getItemHistory(itemId, userId) {
         };
     }
 
-    const command = new QueryCommand({
+    const history = await queryAllPages({
         TableName: process.env.ITEM_HISTORY_TABLE_NAME,
         KeyConditionExpression: "itemId = :itemId",
         ExpressionAttributeValues: {
@@ -205,11 +201,11 @@ async function getItemHistory(itemId, userId) {
         },
         ScanIndexForward: false
     });
-    const response = await docClient.send(command);
+
     return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ history: response.Items }),
+        body: JSON.stringify({ history }),
     };
 }
 
@@ -262,20 +258,18 @@ async function getHistory(targetUserId, requesterId) {
         }
     }
 
-    const params = {
+    const history = await queryAllPages({
         TableName: HISTORY_TABLE,
         IndexName: "UserIndex",
         KeyConditionExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": targetUserId },
         ScanIndexForward: false // Newest first
-    };
+    });
 
-    const command = new QueryCommand(params);
-    const response = await docClient.send(command);
     return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ history: response.Items }),
+        body: JSON.stringify({ history }),
     };
 }
 
@@ -325,6 +319,21 @@ function chunkArray(array, size) {
         chunks.push(array.slice(i, i + size));
     }
     return chunks;
+}
+
+// Fetches all pages of a Query result, handling DynamoDB's 1MB response limit.
+async function queryAllPages(params) {
+    let items = [];
+    let lastKey = undefined;
+
+    do {
+        const command = new QueryCommand({ ...params, ExclusiveStartKey: lastKey });
+        const response = await docClient.send(command);
+        items = items.concat(response.Items || []);
+        lastKey = response.LastEvaluatedKey;
+    } while (lastKey);
+
+    return items;
 }
 
 async function deleteItem(id, userId) {
@@ -389,19 +398,17 @@ async function getCategories(targetUserId, requesterId) {
         }
     }
 
-    const params = {
+    const categories = await queryAllPages({
         TableName: CATEGORIES_TABLE,
         IndexName: "UserIndex",
         KeyConditionExpression: "userId = :uid",
         ExpressionAttributeValues: { ":uid": targetUserId }
-    };
+    });
 
-    const command = new QueryCommand(params);
-    const response = await docClient.send(command);
     return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ categories: response.Items }),
+        body: JSON.stringify({ categories }),
     };
 }
 
@@ -419,10 +426,13 @@ async function saveCategories(categories, userId) {
     const categoriesWithUser = categories.map(cat => ({ ...cat, userId }));
 
     // To ensure a full sync (including deletes) for THIS user, we need to find what's currently in DB for them
-    const currentResponse = await docClient.send(new ScanCommand({
+    // Use QueryCommand + UserIndex GSI instead of a full-table Scan
+    const currentResponse = await docClient.send(new QueryCommand({
         TableName: CATEGORIES_TABLE,
-        FilterExpression: "userId = :uid",
-        ExpressionAttributeValues: { ":uid": userId }
+        IndexName: "UserIndex",
+        KeyConditionExpression: "userId = :uid",
+        ExpressionAttributeValues: { ":uid": userId },
+        ProjectionExpression: "id" // Only fetch IDs — we only need them for diffing
     }));
 
     const existingIds = (currentResponse.Items || []).map(cat => cat.id);
@@ -489,17 +499,17 @@ async function getMyShares(ownerId) {
 }
 
 async function getSharedWithMe(userId) {
-    const command = new QueryCommand({
+    const sharedWithMe = await queryAllPages({
         TableName: USER_SHARES_TABLE,
         IndexName: "SharedWithIndex",
         KeyConditionExpression: "sharedWithId = :userId",
         ExpressionAttributeValues: { ":userId": userId }
     });
-    const response = await docClient.send(command);
+
     return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ sharedWithMe: response.Items }),
+        body: JSON.stringify({ sharedWithMe }),
     };
 }
 
