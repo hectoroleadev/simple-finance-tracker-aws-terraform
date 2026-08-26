@@ -17,6 +17,7 @@ const FinanceItemSchema = z.object({
     name: z.string().min(1),
     amount: z.number(),
     category: z.string().min(1), // Now accepts any string (category ID or legacy name)
+    archivedAt: z.string().datetime().optional(), // ISO 8601. Present = item is archived (SPEC 06)
 });
 
 const CategorySchema = z.object({
